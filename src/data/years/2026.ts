@@ -7,7 +7,7 @@ export const POINTS_2026: BimepPoint[] = [
   { id: 1,  name: 'Štrigova',              description: 'autobusno stajalište u centru naselja (nasuprot ulaza u Ljekarnu)',               lat: 46.500835, lng: 16.285993, precision: 'landmark' },
   { id: 2,  name: 'Gornji Mihaljevec',     description: 'sportski centar',                                                                  lat: 46.425854, lng: 16.327451, precision: 'centre'   },
   { id: 3,  name: 'Macinec',               description: 'Društveni dom',                                                                      lat: 46.387956, lng: 16.324250, precision: 'landmark' },
-  { id: 4,  name: 'Pušćine',               description: 'nogometno igralište',                                                              lat: 46.346780, lng: 16.360786, precision: 'centre'   },
+  { id: 4,  name: 'Pušćine',               description: 'nogometno igralište',                                                              lat: 46.348961, lng: 16.359094, precision: 'centre'   },
   { id: 5,  name: 'Sveti Martin na Muri', description: 'autobusno stajalište u centru naselja (kod stare Osnovne škole)',                  lat: 46.524157, lng: 16.362272, precision: 'landmark' },
   { id: 6,  name: 'Lopatinec (Pleškovec)', description: 'prostor ispred Doma kulture (ispod crkve na glavnoj cesti)',                       lat: 46.438794, lng: 16.380287, precision: 'centre'   },
   { id: 7,  name: 'Čakovec',               description: 'ispred Centra za kulturu (na trgu Republike)',                                     lat: 46.390524, lng: 16.434540, precision: 'landmark' },
