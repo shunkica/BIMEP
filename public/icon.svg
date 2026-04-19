@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f1115"/>
+  <g fill="none" stroke="#c0392b" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="160" cy="360" r="72"/>
+    <circle cx="352" cy="360" r="72"/>
+    <path d="M160 360 L250 200 L352 360"/>
+    <path d="M250 200 L210 200"/>
+    <path d="M320 200 L360 200"/>
+  </g>
+  <circle cx="250" cy="200" r="18" fill="#c0392b"/>
+  <text x="256" y="130" font-family="system-ui, sans-serif" font-weight="800" font-size="84" fill="#fff" text-anchor="middle">BIMEP</text>
+</svg>
