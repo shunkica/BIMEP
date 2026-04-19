@@ -9,7 +9,7 @@ export const POINTS_2026: BimepPoint[] = [
   { id: 3,  name: 'Macinec',               description: 'sportski centar NK CENTROMETAL',                                                   lat: 46.392522, lng: 16.326141, precision: 'landmark' },
   { id: 4,  name: 'Pušćine',               description: 'nogometno igralište',                                                              lat: 46.346780, lng: 16.360786, precision: 'centre'   },
   { id: 5,  name: 'Sveti Martin na Muri', description: 'autobusno stajalište u centru naselja (kod stare Osnovne škole)',                  lat: 46.524157, lng: 16.362272, precision: 'landmark' },
-  { id: 6,  name: 'Lopatinec (Pleškovec)', description: 'prostor ispred Doma kulture (ispod crkve na glavnoj cesti)',                       lat: 46.450805, lng: 16.373211, precision: 'centre'   },
+  { id: 6,  name: 'Lopatinec (Pleškovec)', description: 'prostor ispred Doma kulture (ispod crkve na glavnoj cesti)',                       lat: 46.438794, lng: 16.380287, precision: 'centre'   },
   { id: 7,  name: 'Čakovec',               description: 'ispred Centra za kulturu (na trgu Republike)',                                     lat: 46.390524, lng: 16.434540, precision: 'landmark' },
   { id: 8,  name: 'Mursko Središće',       description: 'prostor nasuprot autobusnog kolodvora (na glavnoj cesti - Martinska ulica)',       lat: 46.512391, lng: 16.438546, precision: 'centre'   },
   { id: 9,  name: 'Orehovica',             description: 'autobusno stajalište u centru naselja (u blizini rotora)',                         lat: 46.332197, lng: 16.506325, precision: 'centre'   },
