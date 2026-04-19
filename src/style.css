@@ -179,7 +179,7 @@ header {
   z-index: 1;
 }
 .pin.not-in-plan {
-  opacity: 0.35;
+  display: none;
 }
 
 .user-dot {

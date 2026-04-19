@@ -10,7 +10,26 @@ export interface PlanState {
   closed: boolean;
 }
 
-let current: PlanState | null = null;
+const PLAN_KEY = 'bimep.plan.v1';
+
+function loadPlan(): PlanState | null {
+  try {
+    const raw = localStorage.getItem(PLAN_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as PlanState;
+    if (!p || !p.result || !Array.isArray(p.result.ordered)) return null;
+    return p;
+  } catch { return null; }
+}
+
+function savePlan(p: PlanState | null) {
+  try {
+    if (p) localStorage.setItem(PLAN_KEY, JSON.stringify(p));
+    else localStorage.removeItem(PLAN_KEY);
+  } catch { /* quota */ }
+}
+
+let current: PlanState | null = loadPlan();
 type Listener = (p: PlanState | null) => void;
 const listeners = new Set<Listener>();
 
@@ -20,6 +39,7 @@ export function getCurrentPlan(): PlanState | null {
 
 export function setPlan(p: PlanState | null) {
   current = p;
+  savePlan(p);
   listeners.forEach(l => l(p));
 }
 

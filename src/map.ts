@@ -89,6 +89,8 @@ export function initMap(containerId: string) {
         'line-dasharray': [2, 2],
       },
     });
+    // Fade the network edges when a plan is active so the plan line reads clearly.
+    updateEdgeOpacityForPlan(getCurrentPlan());
 
     map.addSource('plan', {
       type: 'geojson',
@@ -117,6 +119,7 @@ export function initMap(containerId: string) {
 
     renderForYear(visited.getActiveYear());
     renderPlan(getCurrentPlan());
+    updateEdgeOpacityForPlan(getCurrentPlan());
   });
 
   visited.subscribe(() => {
@@ -128,7 +131,10 @@ export function initMap(containerId: string) {
     }
   });
 
-  onPlanChange(plan => renderPlan(plan));
+  onPlanChange(plan => {
+    renderPlan(plan);
+    updateEdgeOpacityForPlan(plan);
+  });
 
   return map;
 }
@@ -172,21 +178,40 @@ function renderForYear(year: number) {
   }
 }
 
+function updateEdgeOpacityForPlan(plan: PlanState | null) {
+  if (!mapRef) return;
+  const year = visited.getActiveYear();
+  const active = plan != null && plan.year === year && plan.result.ordered.length >= 2;
+  const edgeOp = active ? 0.25 : 0.9;
+  const casingOp = active ? 0.25 : 0.6;
+  try {
+    mapRef.setPaintProperty('edges-solid', 'line-opacity', edgeOp);
+    mapRef.setPaintProperty('edges-dashed', 'line-opacity', edgeOp);
+    mapRef.setPaintProperty('edges-casing', 'line-opacity', casingOp);
+  } catch {
+    // Layers may not exist yet on first call before style is loaded.
+  }
+}
+
 function renderPlan(plan: PlanState | null) {
   if (!mapRef) return;
   const src = mapRef.getSource('plan') as maplibregl.GeoJSONSource | undefined;
   if (!src) return;
-  if (!plan || plan.result.ordered.length < 2) {
+  const activeYear = visited.getActiveYear();
+  const relevant = plan != null && plan.year === activeYear && plan.result.ordered.length >= 2
+    ? plan
+    : null;
+  if (!relevant) {
     src.setData({ type: 'FeatureCollection', features: [] });
     updateMarkerOrdinals(null);
     return;
   }
-  const byId = pointByIdMap(getYearData(plan.year).points);
-  const coords: [number, number][] = plan.result.ordered
+  const byId = pointByIdMap(getYearData(relevant.year).points);
+  const coords: [number, number][] = relevant.result.ordered
     .map(id => byId[id])
     .filter(p => p != null)
     .map(p => [p.lng, p.lat]);
-  if (plan.closed && coords.length > 1) coords.push(coords[0]);
+  if (relevant.closed && coords.length > 1) coords.push(coords[0]);
   src.setData({
     type: 'FeatureCollection',
     features: [{
@@ -195,7 +220,7 @@ function renderPlan(plan: PlanState | null) {
       geometry: { type: 'LineString', coordinates: coords },
     }],
   });
-  updateMarkerOrdinals(plan);
+  updateMarkerOrdinals(relevant);
 }
 
 function updateMarkerOrdinals(plan: PlanState | null) {

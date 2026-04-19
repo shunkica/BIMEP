@@ -114,16 +114,22 @@ function openAuthSheet() {
 /* ---------- Actions bar ---------- */
 
 export function renderActions(onCheckin: () => void, onReset: () => void) {
-  const isCurrent = visited.getActiveYear() === CURRENT_YEAR;
+  const year = visited.getActiveYear();
+  const isCurrent = year === CURRENT_YEAR;
   const plan = getCurrentPlan();
+  const planForThisYear = plan && plan.year === year ? plan : null;
   actionsEl.innerHTML = `
     ${isCurrent ? `<button id="check-in-btn" class="primary">${escapeHtml(t('actions.checkin'))}</button>` : ''}
-    <button id="plan-btn">${escapeHtml(t('plan.button'))}</button>
-    ${plan ? `<button id="clear-plan-btn">${escapeHtml(t('plan.clear'))}</button>` : ''}
+    <button id="plan-btn">${escapeHtml(t(planForThisYear ? 'plan.my_route' : 'plan.button'))}</button>
+    ${planForThisYear ? `<button id="clear-plan-btn">${escapeHtml(t('plan.clear'))}</button>` : ''}
     <button id="reset-btn">${escapeHtml(t('actions.reset'))}</button>
   `;
   actionsEl.querySelector('#check-in-btn')?.addEventListener('click', onCheckin);
-  actionsEl.querySelector('#plan-btn')!.addEventListener('click', openPlanner);
+  actionsEl.querySelector('#plan-btn')!.addEventListener('click', () => {
+    const p = getCurrentPlan();
+    if (p && p.year === visited.getActiveYear()) openPlanResult(p);
+    else openPlanner();
+  });
   actionsEl.querySelector('#clear-plan-btn')?.addEventListener('click', () => setPlan(null));
   actionsEl.querySelector('#reset-btn')!.addEventListener('click', onReset);
 }
@@ -157,6 +163,45 @@ function renderStats() {
 function renderList() {
   const year = visited.getActiveYear();
   const { points } = getYearData(year);
+  const byId = pointByIdMap(points);
+  const plan = getCurrentPlan();
+  const planActive = plan != null && plan.year === year;
+
+  listEl.innerHTML = '';
+
+  if (planActive) {
+    // Plan active: show only planned points in plan order, with step numbers
+    // and per-leg distance instead of raw distance from user.
+    plan.result.ordered.forEach((id, i) => {
+      const point = byId[id];
+      if (!point) return;
+      const v = visited.get(id, year);
+      const legKm = plan.result.legsKm[i];
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'row' + (v ? ' visited' : '');
+      const trail = v
+        ? `<span class="visited-badge">✓ ${escapeHtml(formatClock(v.visitedAt))}</span>`
+        : legKm != null
+          ? `<span class="row-dist">${escapeHtml(t('plan.step_leg', { km: legKm.toFixed(1) }))}</span>`
+          : '';
+      row.innerHTML = `
+        <div class="row-lead">
+          <span class="pin-num in-plan">${i + 1}</span>
+        </div>
+        <div class="row-main">
+          <div class="row-name">${escapeHtml(point.name)}</div>
+          <div class="row-desc">${escapeHtml(point.description)}</div>
+        </div>
+        <div class="row-trail">${trail}</div>
+      `;
+      row.addEventListener('click', () => openSheet(point));
+      listEl.appendChild(row);
+    });
+    return;
+  }
+
+  // No active plan: show everything, ranked by distance.
   const km = roadKmFromUser.size > 0
     ? roadKmFromUser
     : (latestFix ? aerialKmMap(latestFix, points) : new Map<number, number>());
@@ -170,7 +215,6 @@ function renderList() {
       return av - bv;
     });
 
-  listEl.innerHTML = '';
   for (const { point, km } of ranked) {
     const v = visited.get(point.id, year);
     const row = document.createElement('button');
@@ -521,4 +565,6 @@ onAuth(u => {
   currentUser = u;
   renderHeader();
 });
-onPlanChange(() => {});
+onPlanChange(() => {
+  renderList();
+});
