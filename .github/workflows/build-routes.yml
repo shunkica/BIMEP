@@ -1,0 +1,40 @@
+name: Regenerate route lines
+
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: 'Year to regenerate routes for (leave blank for latest)'
+        required: false
+        default: ''
+
+jobs:
+  build-routes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Regenerate routes
+        run: |
+          if [ -n "${{ github.event.inputs.year }}" ]; then
+            node scripts/build-routes.mjs "${{ github.event.inputs.year }}"
+          else
+            node scripts/build-routes.mjs
+          fi
+
+      - name: Commit updated routes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/data/years/routes-*.json
+          git diff --cached --quiet && echo "No changes to commit" || git commit -m "chore: regenerate route lines from updated point coordinates"
+          git push
