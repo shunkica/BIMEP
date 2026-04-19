@@ -1,7 +1,7 @@
 import { haversineMeters } from './data/points';
 import type { BimepPoint } from './data/points';
 
-export const AUTO_CHECKIN_RADIUS_M = 100;
+export const AUTO_CHECKIN_RADIUS_M = 350;
 
 export interface Fix {
   lat: number;
