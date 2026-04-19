@@ -1,6 +1,6 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
-  getAuth, GoogleAuthProvider, OAuthProvider,
+  getAuth, GoogleAuthProvider,
   signInWithPopup, signOut, onAuthStateChanged,
   type User,
 } from 'firebase/auth';
@@ -135,14 +135,6 @@ async function deleteRemote(uid: string, v: Visit) {
 export async function signInGoogle() {
   if (!app) throw new Error('Firebase not configured');
   const provider = new GoogleAuthProvider();
-  await signInWithPopup(getAuth(app), provider);
-}
-
-export async function signInApple() {
-  if (!app) throw new Error('Firebase not configured');
-  const provider = new OAuthProvider('apple.com');
-  provider.addScope('email');
-  provider.addScope('name');
   await signInWithPopup(getAuth(app), provider);
 }
 

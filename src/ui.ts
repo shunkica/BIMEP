@@ -7,7 +7,7 @@ import { formatClock, formatDateTime, formatDuration, parseLocalDateTime, toLoca
 import type { Fix } from './location';
 import { aerialKmMap } from './location';
 import { roadDistancesFrom } from './osrm';
-import { signInGoogle, signInApple, signOutUser, onAuth, isFirebaseConfigured } from './auth';
+import { signInGoogle, signOutUser, onAuth, isFirebaseConfigured } from './auth';
 import type { User } from 'firebase/auth';
 import { computePlan, setPlan, getCurrentPlan, defaultSelectedIds, fmtTotal, planPoints, onPlanChange } from './plan';
 
@@ -82,7 +82,6 @@ function openAuthSheet() {
     : configured
       ? `<p class="muted">${escapeHtml(t('login.blurb'))}</p>
          <button class="primary" data-action="login-google">${escapeHtml(t('actions.login_google'))}</button>
-         <button data-action="login-apple">${escapeHtml(t('actions.login_apple'))}</button>
          <p class="muted small">${escapeHtml(t('login.guest_note'))}</p>`
       : `<p class="muted">${escapeHtml(t('login.not_configured'))}</p>
          <p class="muted small">${escapeHtml(t('login.guest_note'))}</p>`;
@@ -98,9 +97,6 @@ function openAuthSheet() {
   sheetEl.querySelector('.close')!.addEventListener('click', closeSheet);
   sheetEl.querySelector('[data-action="login-google"]')?.addEventListener('click', () => {
     signInGoogle().then(closeSheet).catch(err => setStatus(err.message, 'error'));
-  });
-  sheetEl.querySelector('[data-action="login-apple"]')?.addEventListener('click', () => {
-    signInApple().then(closeSheet).catch(err => setStatus(err.message, 'error'));
   });
   sheetEl.querySelector('[data-action="logout"]')?.addEventListener('click', () => {
     signOutUser().then(closeSheet);
