@@ -1,5 +1,5 @@
 import maplibregl from 'maplibre-gl';
-import { pointByIdMap } from './data/points';
+import { pointByIdMap, haversineMeters } from './data/points';
 import { getYearData } from './data/registry';
 import { getRoute, routeKey } from './data/routes';
 import { visited } from './visited';
@@ -237,4 +237,44 @@ export function showUserFix(fix: Fix) {
 
 export function flyTo(lat: number, lng: number, zoom = 14) {
   mapRef?.flyTo({ center: [lng, lat], zoom });
+}
+
+/**
+ * Pick a sensible initial view once we have the user's fix:
+ *  - If the user is within 15 km of any point (they're at or near the event),
+ *    fit bounds around the user + nearest 3 points so the relationship is
+ *    visible.
+ *  - Otherwise, fit bounds to all points so the whole BIMEP network is shown.
+ * Uses fitBounds rather than flyTo to avoid jarring zooms.
+ */
+export function centerOnUserOrPoints(fix: Fix | null) {
+  if (!mapRef) return;
+  const year = visited.getActiveYear();
+  const { points } = getYearData(year);
+  if (points.length === 0) return;
+
+  const lngs = points.map(p => p.lng);
+  const lats = points.map(p => p.lat);
+  const pMin: [number, number] = [Math.min(...lngs), Math.min(...lats)];
+  const pMax: [number, number] = [Math.max(...lngs), Math.max(...lats)];
+
+  if (fix) {
+    const nearestKm = Math.min(
+      ...points.map(p => haversineMeters(fix.lat, fix.lng, p.lat, p.lng) / 1000),
+    );
+    if (nearestKm <= 15) {
+      const sorted = points
+        .map(p => ({ p, km: haversineMeters(fix.lat, fix.lng, p.lat, p.lng) / 1000 }))
+        .sort((a, b) => a.km - b.km)
+        .slice(0, 3);
+      const fxLngs = [fix.lng, ...sorted.map(x => x.p.lng)];
+      const fxLats = [fix.lat, ...sorted.map(x => x.p.lat)];
+      mapRef.fitBounds(
+        [[Math.min(...fxLngs), Math.min(...fxLats)], [Math.max(...fxLngs), Math.max(...fxLats)]],
+        { padding: 60, maxZoom: 14, duration: 600 },
+      );
+      return;
+    }
+  }
+  mapRef.fitBounds([pMin, pMax], { padding: 40, maxZoom: 11, duration: 600 });
 }
