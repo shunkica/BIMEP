@@ -1,4 +1,5 @@
-import { POINTS, POINT_BY_ID, neighbours, type BimepPoint } from './data/points';
+import { pointByIdMap, neighbours, type BimepPoint } from './data/points';
+import { getYearData, AVAILABLE_YEARS } from './data/registry';
 import { roadKm } from './data/routes';
 import { visited, CURRENT_YEAR, totalTimeMs } from './visited';
 import { openNavigation } from './nav';
@@ -28,12 +29,19 @@ function escapeHtml(s: string) {
   }[c]!));
 }
 
+function yearsList(): number[] {
+  const s = new Set<number>(AVAILABLE_YEARS);
+  for (const v of visited.all()) s.add(v.year);
+  return [...s].sort((a, b) => b - a);
+}
+
 /* ---------- Header ---------- */
 
 export function renderHeader() {
   const year = visited.getActiveYear();
-  const years = visited.years();
+  const years = yearsList();
   const isCurrent = year === CURRENT_YEAR;
+  const { points } = getYearData(year);
 
   const authLabel = currentUser
     ? (currentUser.displayName || currentUser.email || '👤')
@@ -58,7 +66,7 @@ export function renderHeader() {
       </select>
       ${authPart}
     </div>
-    <div id="progress">${escapeHtml(t('app.progress', { done: visited.forYear(year).length, total: POINTS.length }))}</div>
+    <div id="progress">${escapeHtml(t('app.progress', { done: visited.forYear(year).length, total: points.length }))}</div>
   `;
 
   (header.querySelector('#year-select') as HTMLSelectElement).addEventListener('change', e => {
@@ -124,6 +132,7 @@ export function renderActions(onCheckin: () => void, onReset: () => void) {
 
 function renderStats() {
   const year = visited.getActiveYear();
+  const { points } = getYearData(year);
   const count = visited.forYear(year).length;
   const total = totalTimeMs(year);
   if (count === 0) {
@@ -134,7 +143,7 @@ function renderStats() {
   statsEl.style.display = '';
   statsEl.innerHTML = `
     <div class="stat">
-      <span class="stat-label">${escapeHtml(t('app.progress', { done: count, total: POINTS.length }))}</span>
+      <span class="stat-label">${escapeHtml(t('app.progress', { done: count, total: points.length }))}</span>
     </div>
     ${total != null ? `<div class="stat">
       <span class="stat-label">${escapeHtml(t('history.total_time'))}:</span>
@@ -147,10 +156,13 @@ function renderStats() {
 
 function renderList() {
   const year = visited.getActiveYear();
-  const km = roadKmFromUser.size > 0 ? roadKmFromUser : (latestFix ? aerialKmMap(latestFix) : new Map<number, number>());
+  const { points } = getYearData(year);
+  const km = roadKmFromUser.size > 0
+    ? roadKmFromUser
+    : (latestFix ? aerialKmMap(latestFix, points) : new Map<number, number>());
   const usingRoad = roadKmFromUser.size > 0;
 
-  const ranked = POINTS
+  const ranked = points
     .map(p => ({ point: p, km: km.get(p.id) }))
     .sort((a, b) => {
       const av = visited.has(a.point.id, year) ? Infinity : (a.km ?? Infinity);
@@ -190,12 +202,16 @@ function renderList() {
 
 export function openSheet(p: BimepPoint) {
   const year = visited.getActiveYear();
+  const { points, edges } = getYearData(year);
+  const byId = pointByIdMap(points);
   const v = visited.get(p.id, year);
   const isCurrent = year === CURRENT_YEAR;
 
-  const nbrsHtml = neighbours(p.id)
+  const nbrs = neighbours(p.id, points, edges, (a, b) => roadKm(year, a, b));
+
+  const nbrsHtml = nbrs
     .map(({ point, km }) => {
-      const road = roadKm(p.id, point.id);
+      const road = roadKm(year, p.id, point.id);
       const kmText = road != null ? road.toFixed(1) : km > 0 ? km.toFixed(1) : '?';
       const vn = visited.has(point.id, year);
       return `<li class="${vn ? 'visited' : ''}">
@@ -205,8 +221,8 @@ export function openSheet(p: BimepPoint) {
     })
     .join('');
 
-  const nextSuggestion = neighbours(p.id).find(n => !visited.has(n.point.id, year));
-  const suggestKm = nextSuggestion ? (roadKm(p.id, nextSuggestion.point.id) ?? nextSuggestion.km) : 0;
+  const nextSuggestion = nbrs.find(n => !visited.has(n.point.id, year));
+  const suggestKm = nextSuggestion ? (roadKm(year, p.id, nextSuggestion.point.id) ?? nextSuggestion.km) : 0;
   const suggestionHtml = nextSuggestion
     ? `<div class="suggest">${escapeHtml(t('sheet.next_suggestion', { name: nextSuggestion.point.name, km: suggestKm.toFixed(1) }))}</div>`
     : `<div class="suggest">${escapeHtml(t('sheet.all_neighbours_visited'))}</div>`;
@@ -248,11 +264,13 @@ export function openSheet(p: BimepPoint) {
   sheetEl.querySelector('[data-action="navigate"]')?.addEventListener('click', () => openNavigation(p));
   sheetEl.querySelector('[data-action="mark"]')?.addEventListener('click', () => {
     visited.mark(p.id, 'manual');
-    openSheet(POINT_BY_ID[p.id]);
+    const np = byId[p.id];
+    if (np) openSheet(np);
   });
   sheetEl.querySelector('[data-action="unmark"]')?.addEventListener('click', () => {
     visited.unmark(p.id);
-    openSheet(POINT_BY_ID[p.id]);
+    const np = byId[p.id];
+    if (np) openSheet(np);
   });
   sheetEl.querySelector('[data-action="edit-time"]')?.addEventListener('click', () => {
     const existing = visited.get(p.id, year);
@@ -265,7 +283,8 @@ export function openSheet(p: BimepPoint) {
       return;
     }
     visited.setTime(p.id, parsed);
-    openSheet(POINT_BY_ID[p.id]);
+    const np = byId[p.id];
+    if (np) openSheet(np);
   });
 }
 
@@ -298,9 +317,12 @@ export function openPlanner() {
 function renderPlanner() {
   if (!plannerDraft) return;
   const draft = plannerDraft;
-  const pointRows = POINTS.map(p => {
+  const year = visited.getActiveYear();
+  const { points } = getYearData(year);
+
+  const pointRows = points.map(p => {
     const checked = draft.selected.has(p.id);
-    const isVisited = visited.has(p.id);
+    const isVisited = visited.has(p.id, year);
     return `<label class="plan-row ${isVisited ? 'is-visited' : ''}">
       <input type="checkbox" data-id="${p.id}" ${checked ? 'checked' : ''}>
       <span class="plan-row-num">${p.id}</span>
@@ -311,7 +333,7 @@ function renderPlanner() {
 
   const startOptions = [
     `<option value="optimal" ${draft.startMode === 'optimal' ? 'selected' : ''}>${escapeHtml(t('plan.start_optimal'))}</option>`,
-    ...POINTS.filter(p => draft.selected.has(p.id)).map(p =>
+    ...points.filter(p => draft.selected.has(p.id)).map(p =>
       `<option value="${p.id}" ${draft.startMode === p.id ? 'selected' : ''}>#${p.id} ${escapeHtml(p.name)}</option>`,
     ),
   ].join('');
@@ -354,11 +376,10 @@ function renderPlanner() {
       const id = Number(cb.dataset.id);
       if (cb.checked) draft.selected.add(id);
       else draft.selected.delete(id);
-      // Rebuild only the start dropdown so the selected list stays in sync.
       const sel = sheetEl.querySelector('#plan-start') as HTMLSelectElement;
       const newOpts = [
         `<option value="optimal" ${draft.startMode === 'optimal' ? 'selected' : ''}>${escapeHtml(t('plan.start_optimal'))}</option>`,
-        ...POINTS.filter(p => draft.selected.has(p.id)).map(p =>
+        ...points.filter(p => draft.selected.has(p.id)).map(p =>
           `<option value="${p.id}" ${draft.startMode === p.id ? 'selected' : ''}>#${p.id} ${escapeHtml(p.name)}</option>`,
         ),
       ].join('');
@@ -368,9 +389,9 @@ function renderPlanner() {
   sheetEl.querySelectorAll<HTMLButtonElement>('.planner-quick button').forEach(btn => {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.select;
-      if (mode === 'all') draft.selected = new Set(POINTS.map(p => p.id));
+      if (mode === 'all') draft.selected = new Set(points.map(p => p.id));
       else if (mode === 'none') draft.selected.clear();
-      else if (mode === 'unvisited') draft.selected = new Set(POINTS.filter(p => !visited.has(p.id)).map(p => p.id));
+      else if (mode === 'unvisited') draft.selected = new Set(points.filter(p => !visited.has(p.id, year)).map(p => p.id));
       renderPlanner();
     });
   });
@@ -406,11 +427,12 @@ function renderPlanner() {
 
 function openPlanResult(plan: ReturnType<typeof getCurrentPlan> & {}) {
   if (!plan) return;
+  const byId = pointByIdMap(getYearData(plan.year).points);
   const pts = planPoints(plan);
   const legs = plan.result.legsKm;
 
   const rows = pts.map((p, i) => {
-    const vis = visited.has(p.id);
+    const vis = visited.has(p.id, plan.year);
     const legText = legs[i] != null ? t('plan.step_leg', { km: legs[i].toFixed(1) }) : '';
     return `<li class="plan-step ${vis ? 'visited' : ''}">
       <button type="button" class="step-btn" data-id="${p.id}">
@@ -446,7 +468,7 @@ function openPlanResult(plan: ReturnType<typeof getCurrentPlan> & {}) {
   sheetEl.querySelectorAll<HTMLButtonElement>('.step-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = Number(btn.dataset.id);
-      const p = POINT_BY_ID[id];
+      const p = byId[id];
       if (p) openSheet(p);
     });
   });
@@ -475,7 +497,7 @@ export function renderAll() {
 export async function updateRoadDistances(fix: Fix) {
   latestFix = fix;
   try {
-    roadKmFromUser = await roadDistancesFrom(fix);
+    roadKmFromUser = await roadDistancesFrom(fix, visited.getActiveYear());
     renderList();
   } catch {
     // ignore
@@ -499,7 +521,4 @@ onAuth(u => {
   currentUser = u;
   renderHeader();
 });
-onPlanChange(() => {
-  // Keep plan-related UI in sync. The action bar rebuilds itself via its own subscribe.
-  // Nothing else to do — the map subscribes independently.
-});
+onPlanChange(() => {});

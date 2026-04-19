@@ -1,4 +1,4 @@
-import { POINTS, haversineMeters } from './data/points';
+import { haversineMeters } from './data/points';
 import type { BimepPoint } from './data/points';
 
 export const AUTO_CHECKIN_RADIUS_M = 100;
@@ -47,15 +47,15 @@ export function watchFix(
   return () => navigator.geolocation.clearWatch(id);
 }
 
-export function pointsWithin(fix: Fix, radiusM: number): BimepPoint[] {
-  return POINTS.filter(
+export function pointsWithin(fix: Fix, radiusM: number, points: BimepPoint[]): BimepPoint[] {
+  return points.filter(
     p => haversineMeters(fix.lat, fix.lng, p.lat, p.lng) <= radiusM,
   );
 }
 
-export function aerialKmMap(fix: Fix): Map<number, number> {
+export function aerialKmMap(fix: Fix, points: BimepPoint[]): Map<number, number> {
   const m = new Map<number, number>();
-  for (const p of POINTS) {
+  for (const p of points) {
     m.set(p.id, haversineMeters(fix.lat, fix.lng, p.lat, p.lng) / 1000);
   }
   return m;

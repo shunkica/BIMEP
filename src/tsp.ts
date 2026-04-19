@@ -1,20 +1,22 @@
-import { POINTS } from './data/points';
+import { getYearData } from './data/registry';
 
-const MATRIX_KEY = 'bimep.dm.v1';
+const MATRIX_KEY = 'bimep.dm.v2';
 const MATRIX_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 
 interface MatrixCache {
+  year: number;
   km: number[][];
   at: number;
   n: number;
 }
 
-export async function fetchDistanceMatrix(force = false): Promise<number[][]> {
+export async function fetchDistanceMatrix(year: number, force = false): Promise<number[][]> {
+  const points = getYearData(year).points;
   if (!force) {
-    const cached = loadCache();
+    const cached = loadCache(year, points.length);
     if (cached) return cached;
   }
-  const coords = POINTS.map(p => `${p.lng},${p.lat}`).join(';');
+  const coords = points.map(p => `${p.lng},${p.lat}`).join(';');
   const url = `https://routing.openstreetmap.de/routed-bike/table/v1/bike/${coords}?annotations=distance`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`table ${res.status}`);
@@ -23,23 +25,23 @@ export async function fetchDistanceMatrix(force = false): Promise<number[][]> {
   const km: number[][] = data.distances.map((row: (number | null)[]) =>
     row.map(v => (v == null ? Infinity : v / 1000)),
   );
-  saveCache({ km, at: Date.now(), n: POINTS.length });
+  saveCache({ year, km, at: Date.now(), n: points.length });
   return km;
 }
 
-function loadCache(): number[][] | null {
+function loadCache(year: number, n: number): number[][] | null {
   try {
-    const raw = localStorage.getItem(MATRIX_KEY);
+    const raw = localStorage.getItem(`${MATRIX_KEY}.${year}`);
     if (!raw) return null;
     const c = JSON.parse(raw) as MatrixCache;
-    if (c.n !== POINTS.length) return null;
+    if (c.year !== year || c.n !== n) return null;
     if (Date.now() - c.at > MATRIX_TTL_MS) return null;
     return c.km;
   } catch { return null; }
 }
 
 function saveCache(c: MatrixCache) {
-  try { localStorage.setItem(MATRIX_KEY, JSON.stringify(c)); } catch { /* quota */ }
+  try { localStorage.setItem(`${MATRIX_KEY}.${c.year}`, JSON.stringify(c)); } catch { /* quota */ }
 }
 
 export interface TspResult {
@@ -49,16 +51,18 @@ export interface TspResult {
 }
 
 export interface TspOptions {
-  closed?: boolean;      // return to start
-  startId?: number;      // fixed starting point ID
+  closed?: boolean;
+  startId?: number;
 }
 
 export function solveTSP(
   km: number[][],
   selectedIds: number[],
+  year: number,
   options: TspOptions = {},
 ): TspResult {
-  const idxByPointId = new Map(POINTS.map((p, i) => [p.id, i]));
+  const points = getYearData(year).points;
+  const idxByPointId = new Map(points.map((p, i) => [p.id, i]));
   const sel = selectedIds
     .map(id => idxByPointId.get(id))
     .filter((i): i is number => i != null);
@@ -69,7 +73,7 @@ export function solveTSP(
   const d = (i: number, j: number) => km[sel[i]][sel[j]];
 
   const startLocal = options.startId != null
-    ? sel.findIndex(i => POINTS[i].id === options.startId)
+    ? sel.findIndex(i => points[i].id === options.startId)
     : -1;
 
   const starts = startLocal >= 0 ? [startLocal] : Array.from({ length: n }, (_, i) => i);
@@ -97,7 +101,7 @@ export function solveTSP(
   }
 
   return {
-    ordered: bestTour.map(i => POINTS[sel[i]].id),
+    ordered: bestTour.map(i => points[sel[i]].id),
     legsKm,
     totalKm: bestKm,
   };

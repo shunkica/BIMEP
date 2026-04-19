@@ -1,7 +1,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import { initMap, showUserFix, flyTo } from './map';
-import { renderAll, setStatus, updateRoadDistances, setFix } from './ui';
+import { renderAll, renderActions, setStatus, updateRoadDistances, setFix } from './ui';
 import { t } from './i18n';
 import {
   getCurrentFix,
@@ -10,6 +10,7 @@ import {
   AUTO_CHECKIN_RADIUS_M,
 } from './location';
 import { visited, CURRENT_YEAR } from './visited';
+import { getYearData } from './data/registry';
 import { initAuth } from './auth';
 import { onPlanChange } from './plan';
 import { registerSW } from 'virtual:pwa-register';
@@ -18,16 +19,18 @@ registerSW({ immediate: true });
 initAuth();
 initMap('map');
 renderAll();
+renderActions(runProximityCheck, resetVisits);
 
 async function runProximityCheck() {
   if (visited.getActiveYear() !== CURRENT_YEAR) return;
+  const { points } = getYearData(CURRENT_YEAR);
   try {
     const fix = await getCurrentFix();
     showUserFix(fix);
     setFix(fix);
     updateRoadDistances(fix).catch(() => {});
 
-    const nearby = pointsWithin(fix, AUTO_CHECKIN_RADIUS_M);
+    const nearby = pointsWithin(fix, AUTO_CHECKIN_RADIUS_M, points);
     if (nearby.length === 0) {
       setStatus(t('status.not_near_any'), 'info');
       return;
@@ -54,9 +57,6 @@ function resetVisits() {
     setStatus(t('status.cleared'), 'info');
   }
 }
-
-import { renderActions } from './ui';
-renderActions(runProximityCheck, resetVisits);
 
 visited.subscribe(() => {
   renderActions(runProximityCheck, resetVisits);

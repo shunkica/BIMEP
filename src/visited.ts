@@ -1,4 +1,4 @@
-import { POINTS } from './data/points';
+import { LATEST_YEAR } from './data/registry';
 
 export type VisitSource = 'auto' | 'manual';
 
@@ -9,7 +9,12 @@ export interface Visit {
   source: VisitSource;
 }
 
-export const CURRENT_YEAR = 2026;
+/**
+ * The year the app treats as "writable right now" — points and visits for
+ * this year can be added, edited, or removed. Past years are read-only.
+ * Sourced from the data registry (newest dataset that ships with the build).
+ */
+export const CURRENT_YEAR = LATEST_YEAR;
 const KEY = 'bimep.visits.v2';
 
 function visitKey(year: number, pointId: number): string {
@@ -68,7 +73,7 @@ export const visited = {
   forYear(year: number = activeYear): Visit[] {
     return [...store.values()].filter(v => v.year === year);
   },
-  /** Years that have at least one visit. */
+  /** Years that have at least one visit OR a shipped dataset. */
   years(): number[] {
     const set = new Set<number>([CURRENT_YEAR]);
     for (const v of store.values()) set.add(v.year);
@@ -150,7 +155,7 @@ export const visited = {
   },
 };
 
-/** Total elapsed time from first to last visit in the active year (ms). */
+/** Total elapsed time from first to last visit in the given year (ms). */
 export function totalTimeMs(year: number = activeYear): number | null {
   const visits = visited.forYear(year);
   if (visits.length < 2) return null;
@@ -167,10 +172,3 @@ export function legs(year: number = activeYear): { from: Visit; to: Visit; ms: n
   }
   return out;
 }
-
-/** Visit count for a year. */
-export function countForYear(year: number = activeYear): number {
-  return visited.forYear(year).length;
-}
-
-export const TOTAL_POINTS = POINTS.length;

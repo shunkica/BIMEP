@@ -1,9 +1,11 @@
-import { POINTS, POINT_BY_ID } from './data/points';
+import { pointByIdMap } from './data/points';
+import { getYearData } from './data/registry';
 import { visited, CURRENT_YEAR } from './visited';
 import { fetchDistanceMatrix, solveTSP, estimateTime, type TspResult } from './tsp';
 import { t } from './i18n';
 
 export interface PlanState {
+  year: number;
   result: TspResult;
   closed: boolean;
 }
@@ -30,23 +32,26 @@ export async function computePlan(
   selectedIds: number[],
   opts: { closed: boolean; startId?: number },
 ): Promise<PlanState> {
-  const km = await fetchDistanceMatrix();
-  const result = solveTSP(km, selectedIds, opts);
-  const state: PlanState = { result, closed: opts.closed };
+  const year = visited.getActiveYear();
+  const km = await fetchDistanceMatrix(year);
+  const result = solveTSP(km, selectedIds, year, opts);
+  const state: PlanState = { year, result, closed: opts.closed };
   setPlan(state);
   return state;
 }
 
-// Default selection: unvisited points if there are 2+, else all.
+// Default selection: unvisited points for the active year if there are 2+, else all.
 export function defaultSelectedIds(): number[] {
   const year = visited.getActiveYear();
-  const unvisited = POINTS.filter(p => !visited.has(p.id, year)).map(p => p.id);
+  const { points } = getYearData(year);
+  const unvisited = points.filter(p => !visited.has(p.id, year)).map(p => p.id);
   if (unvisited.length >= 2 && year === CURRENT_YEAR) return unvisited;
-  return POINTS.map(p => p.id);
+  return points.map(p => p.id);
 }
 
 export function planPoints(plan: PlanState) {
-  return plan.result.ordered.map(id => POINT_BY_ID[id]);
+  const byId = pointByIdMap(getYearData(plan.year).points);
+  return plan.result.ordered.map(id => byId[id]).filter(p => p != null);
 }
 
 // Convenience label used in plan overlay / list.

@@ -1,46 +1,67 @@
 #!/usr/bin/env node
-// Fetch road-snapped routes between connected BIMEP points from the public
-// OSRM demo (profile=bike -> falls back to driving where bike is unavailable).
-// Writes src/data/routes.json keyed by "a-b" (a < b).
+// Fetch road-snapped bike routes between connected BIMEP points for a given
+// year, and bake the polylines into src/data/years/routes-<year>.json.
 //
-// Run: node scripts/build-routes.mjs
+// Usage:
+//   node scripts/build-routes.mjs            # defaults to the latest year file
+//   node scripts/build-routes.mjs 2026
 //
-// OSRM demo has no hard rate limit but is best-effort — we sleep between calls.
+// Reads src/data/years/<year>.ts for POINTS_<year> / EDGES_<year>.
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const pointsTs = await readFile(join(__dirname, '..', 'src', 'data', 'points.ts'), 'utf8');
+const yearsDir = join(__dirname, '..', 'src', 'data', 'years');
 
-function parsePoints(src) {
-  const lines = src.split('\n');
-  const points = {};
-  for (const l of lines) {
-    const m = l.match(/\{\s*id:\s*(\d+).*?lat:\s*([\d.]+),\s*lng:\s*([\d.]+)/);
-    if (m) points[Number(m[1])] = { lat: Number(m[2]), lng: Number(m[3]) };
+const arg = process.argv[2];
+let year;
+if (arg) {
+  year = Number(arg);
+  if (!Number.isFinite(year)) {
+    console.error(`invalid year: ${arg}`);
+    process.exit(1);
   }
-  return points;
+} else {
+  const files = await readdir(yearsDir);
+  const yrs = files
+    .map(f => f.match(/^(\d{4})\.ts$/))
+    .filter(Boolean)
+    .map(m => Number(m[1]))
+    .sort((a, b) => b - a);
+  if (!yrs.length) {
+    console.error('no year files found in src/data/years/');
+    process.exit(1);
+  }
+  year = yrs[0];
 }
 
-function parseEdges(src) {
-  const edgesBlock = src.split(/export const EDGES[^[]*\[/)[1]?.split('];')[0] ?? '';
+const yearPath = join(yearsDir, `${year}.ts`);
+const src = await readFile(yearPath, 'utf8');
+
+function parsePoints(s) {
+  const out = {};
+  const rx = /\{\s*id:\s*(\d+),[^}]*lat:\s*([\d.]+),\s*lng:\s*([\d.]+)/g;
+  let m;
+  while ((m = rx.exec(s))) out[Number(m[1])] = { lat: Number(m[2]), lng: Number(m[3]) };
+  return out;
+}
+
+function parseEdges(s) {
+  const block = s.split(/export const EDGES_\d+[^[]*\[/)[1]?.split('];')[0] ?? '';
   const out = [];
-  for (const l of edgesBlock.split('\n')) {
+  for (const l of block.split('\n')) {
     const m = l.match(/a:\s*(\d+)[^}]*b:\s*(\d+)/);
     if (m) out.push([Number(m[1]), Number(m[2])]);
   }
   return out;
 }
 
-const points = parsePoints(pointsTs);
-const edges = parseEdges(pointsTs);
+const points = parsePoints(src);
+const edges = parseEdges(src);
+console.log(`Year ${year}: ${Object.keys(points).length} points, ${edges.length} edges.`);
 
-console.log(`Fetching ${edges.length} routes...`);
-
-// Bike routing via OSM Foundation's public endpoint (OSRM with bicycle profile).
-// Falls back to driving (router.project-osrm.org) if bike is unreachable.
 const BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike';
 const DRIVE = 'https://router.project-osrm.org/route/v1/driving';
 const routes = {};
@@ -79,6 +100,6 @@ for (const [a, b] of edges) {
   await new Promise(r => setTimeout(r, 400));
 }
 
-const outPath = join(__dirname, '..', 'src', 'data', 'routes.json');
+const outPath = join(yearsDir, `routes-${year}.json`);
 await writeFile(outPath, JSON.stringify(routes, null, 2) + '\n');
 console.log(`\nWrote ${outPath}`);

@@ -1,5 +1,6 @@
 import maplibregl from 'maplibre-gl';
-import { POINTS, POINT_BY_ID, EDGES } from './data/points';
+import { pointByIdMap } from './data/points';
+import { getYearData } from './data/registry';
 import { getRoute, routeKey } from './data/routes';
 import { visited } from './visited';
 import { openSheet } from './ui';
@@ -8,24 +9,26 @@ import { getCurrentPlan, onPlanChange, type PlanState } from './plan';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
+// Per-year markers: keyed by `${year}_${id}` so switching years keeps the
+// right set on the map.
 const markers = new Map<number, maplibregl.Marker>();
+let renderedYear: number | null = null;
 let userMarker: maplibregl.Marker | null = null;
 let mapRef: maplibregl.Map | null = null;
-let latestFix: Fix | null = null;
 
-function markerEl(id: number): HTMLDivElement {
+function markerEl(year: number, id: number): HTMLDivElement {
   const el = document.createElement('div');
-  const isVisited = visited.has(id);
+  const isVisited = visited.has(id, year);
   el.className = 'pin' + (isVisited ? ' visited' : '');
   el.textContent = String(id);
   return el;
 }
 
-function refreshMarker(id: number) {
+function refreshMarker(year: number, id: number) {
   const m = markers.get(id);
   if (!m) return;
   const el = m.getElement();
-  el.classList.toggle('visited', visited.has(id));
+  el.classList.toggle('visited', visited.has(id, year));
 }
 
 export function initMap(containerId: string) {
@@ -49,23 +52,9 @@ export function initMap(containerId: string) {
   );
 
   map.on('load', () => {
-    const edgeFeatures: GeoJSON.Feature[] = [];
-    for (const e of EDGES) {
-      const route = getRoute(e.a, e.b);
-      if (!route) continue;
-      edgeFeatures.push({
-        type: 'Feature',
-        properties: {
-          dashed: !!e.dashed,
-          key: routeKey(e.a, e.b),
-          distanceM: route.distanceM,
-        },
-        geometry: route.geometry,
-      });
-    }
     map.addSource('edges', {
       type: 'geojson',
-      data: { type: 'FeatureCollection', features: edgeFeatures },
+      data: { type: 'FeatureCollection', features: [] },
     });
     map.addLayer({
       id: 'edges-casing',
@@ -101,25 +90,6 @@ export function initMap(containerId: string) {
       },
     });
 
-    for (const p of POINTS) {
-      const el = markerEl(p.id);
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([p.lng, p.lat])
-        .addTo(map);
-      el.addEventListener('click', ev => {
-        ev.stopPropagation();
-        openSheet(p);
-        void latestFix;
-      });
-      markers.set(p.id, marker);
-    }
-  });
-
-  visited.subscribe(() => {
-    for (const id of markers.keys()) refreshMarker(id);
-  });
-
-  map.on('load', () => {
     map.addSource('plan', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
@@ -144,12 +114,62 @@ export function initMap(containerId: string) {
         'line-opacity': 0.95,
       },
     });
+
+    renderForYear(visited.getActiveYear());
     renderPlan(getCurrentPlan());
+  });
+
+  visited.subscribe(() => {
+    const year = visited.getActiveYear();
+    if (year !== renderedYear) {
+      renderForYear(year);
+    } else {
+      for (const id of markers.keys()) refreshMarker(year, id);
+    }
   });
 
   onPlanChange(plan => renderPlan(plan));
 
   return map;
+}
+
+function renderForYear(year: number) {
+  if (!mapRef) return;
+  renderedYear = year;
+  const { points, edges } = getYearData(year);
+
+  // Rebuild edges
+  const edgeFeatures: GeoJSON.Feature[] = [];
+  for (const e of edges) {
+    const route = getRoute(year, e.a, e.b);
+    if (!route) continue;
+    edgeFeatures.push({
+      type: 'Feature',
+      properties: {
+        dashed: !!e.dashed,
+        key: routeKey(e.a, e.b),
+        distanceM: route.distanceM,
+      },
+      geometry: route.geometry,
+    });
+  }
+  const edgeSrc = mapRef.getSource('edges') as maplibregl.GeoJSONSource | undefined;
+  edgeSrc?.setData({ type: 'FeatureCollection', features: edgeFeatures });
+
+  // Rebuild markers
+  for (const m of markers.values()) m.remove();
+  markers.clear();
+  for (const p of points) {
+    const el = markerEl(year, p.id);
+    const marker = new maplibregl.Marker({ element: el })
+      .setLngLat([p.lng, p.lat])
+      .addTo(mapRef);
+    el.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openSheet(p);
+    });
+    markers.set(p.id, marker);
+  }
 }
 
 function renderPlan(plan: PlanState | null) {
@@ -161,10 +181,11 @@ function renderPlan(plan: PlanState | null) {
     updateMarkerOrdinals(null);
     return;
   }
-  const coords: [number, number][] = plan.result.ordered.map(id => {
-    const p = POINT_BY_ID[id];
-    return [p.lng, p.lat];
-  });
+  const byId = pointByIdMap(getYearData(plan.year).points);
+  const coords: [number, number][] = plan.result.ordered
+    .map(id => byId[id])
+    .filter(p => p != null)
+    .map(p => [p.lng, p.lat]);
   if (plan.closed && coords.length > 1) coords.push(coords[0]);
   src.setData({
     type: 'FeatureCollection',
@@ -204,7 +225,6 @@ function updateMarkerOrdinals(plan: PlanState | null) {
 }
 
 export function showUserFix(fix: Fix) {
-  latestFix = fix;
   if (!mapRef) return;
   if (!userMarker) {
     const el = document.createElement('div');

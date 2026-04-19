@@ -1,14 +1,30 @@
 #!/usr/bin/env node
-// Solve "shortest path visiting all 19 BIMEP points" (open TSP).
+// Solve "shortest path visiting all BIMEP points for a given year" (open TSP).
 // Uses bike-routed all-pairs distances from routing.openstreetmap.de /table,
 // then nearest-neighbor from every start + 2-opt improvement.
+//
+// Usage:
+//   node scripts/tsp.mjs            # defaults to the latest year file
+//   node scripts/tsp.mjs 2026
 
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = await readFile(join(__dirname, '..', 'src', 'data', 'points.ts'), 'utf8');
+const yearsDir = join(__dirname, '..', 'src', 'data', 'years');
+
+const arg = process.argv[2];
+let year;
+if (arg) {
+  year = Number(arg);
+} else {
+  const files = await readdir(yearsDir);
+  const yrs = files.map(f => f.match(/^(\d{4})\.ts$/)).filter(Boolean).map(m => Number(m[1])).sort((a, b) => b - a);
+  year = yrs[0];
+}
+const src = await readFile(join(yearsDir, `${year}.ts`), 'utf8');
+console.log(`Using year ${year}.`);
 
 function parsePoints(s) {
   const out = [];
