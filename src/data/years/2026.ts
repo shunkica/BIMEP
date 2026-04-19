@@ -5,7 +5,7 @@ import type { BimepPoint, BimepEdge } from '../points';
 // point with id 1 in 2026 has no relation to id 1 in any other year.
 export const POINTS_2026: BimepPoint[] = [
   { id: 1,  name: 'Štrigova',              description: 'autobusno stajalište u centru naselja (nasuprot ulaza u Ljekarnu)',               lat: 46.500835, lng: 16.285993, precision: 'landmark' },
-  { id: 2,  name: 'Gornji Mihaljevec',     description: 'sportski centar',                                                                  lat: 46.430012, lng: 16.323245, precision: 'centre'   },
+  { id: 2,  name: 'Gornji Mihaljevec',     description: 'sportski centar',                                                                  lat: 46.425854, lng: 16.327451, precision: 'centre'   },
   { id: 3,  name: 'Macinec',               description: 'sportski centar NK CENTROMETAL',                                                   lat: 46.392522, lng: 16.326141, precision: 'landmark' },
   { id: 4,  name: 'Pušćine',               description: 'nogometno igralište',                                                              lat: 46.346780, lng: 16.360786, precision: 'centre'   },
   { id: 5,  name: 'Sveti Martin na Muri', description: 'autobusno stajalište u centru naselja (kod stare Osnovne škole)',                  lat: 46.524157, lng: 16.362272, precision: 'landmark' },
